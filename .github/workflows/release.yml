@@ -48,7 +48,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: tika-server/tika-server-standard/target/tika-server-standard-3.1.0.jar
+          file: tika-server/tika-server-standard/target/tika-server-standard-3.2.2.jar
           tag: "${{ env.TAG }}"
           overwrite: true
           file_glob: true

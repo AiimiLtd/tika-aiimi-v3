@@ -57,6 +57,8 @@ The name may be different, but as it is built from a Tag, it should follow this 
 
 Edit the **DockerFile** in the root folder, to reflect the jar file name.
 
+Edit the **release.yml** in the **.github/workflows** folder, to reflect the jar file name.
+
 Commit and push changes.
 
 # Release
