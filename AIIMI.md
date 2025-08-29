@@ -21,5 +21,5 @@ Create or checkout the Aiimi corresponding branch. Merge the **branch_3x** into 
 Set the head to the Tag...
 
 ```
-get revert --hard 3.2.2
+git revert --hard 3.2.2
 ```
