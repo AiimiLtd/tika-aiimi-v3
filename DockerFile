@@ -1,5 +1,5 @@
 FROM openjdk:21-slim
-COPY ./tika-server/tika-server-standard/target/tika-server-standard-3.1.0.jar /app/tika.jar
+COPY ./tika-server/tika-server-standard/target/tika-server-standard-3.2.2.jar /app/tika.jar
 EXPOSE 9998
 ENV _JAVA_OPTIONS "-XX:MinRAMPercentage=60.0 -XX:MaxRAMPercentage=80.0"
 CMD java -jar /app/tika.jar -host 0.0.0.0 -port 9998
