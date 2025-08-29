@@ -26,9 +26,9 @@ import org.junit.jupiter.api.Test;
 
 import org.apache.tika.TikaTest;
 import org.apache.tika.config.TikaConfig;
+import org.apache.tika.metadata.MAPI;
 import org.apache.tika.metadata.Message;
 import org.apache.tika.metadata.Metadata;
-import org.apache.tika.metadata.Office;
 import org.apache.tika.metadata.PST;
 import org.apache.tika.metadata.TikaCoreProperties;
 import org.apache.tika.parser.AutoDetectParser;
@@ -54,7 +54,6 @@ public class TestLibPstParser extends TikaTest {
         List<Metadata> metadataList = getRecursiveMetadata("testPST.pst", p);
         //libpst is non-deterministic when creating msg files -- sometimes we get 7, sometimes 8
         assumeTrue(metadataList.size() == 8);
-
         Metadata m0 = metadataList.get(0);
         assertEquals("org.apache.tika.parser.microsoft.libpst.LibPstParser", m0.getValues(TikaCoreProperties.TIKA_PARSED_BY)[1]);
         int validPaths = 0;
@@ -79,7 +78,7 @@ public class TestLibPstParser extends TikaTest {
 
         assertEquals("NOTE", metadataList
                 .get(7)
-                .get(Office.MAPI_MESSAGE_CLASS));
+                .get(MAPI.MESSAGE_CLASS));
     }
 
     @Test

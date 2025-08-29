@@ -266,7 +266,7 @@ public abstract class AbstractProfiler extends FileResourceConsumer {
 
     private static ContentTags parseContentAndTags(EvalFilePaths evalFilePaths, Metadata metadata) {
         String s = metadata.get(TikaCoreProperties.TIKA_CONTENT);
-        if (s == null || s.length() == 0) {
+        if (s == null || s.isEmpty()) {
             return ContentTags.EMPTY_CONTENT_TAGS;
         }
 
@@ -401,9 +401,9 @@ public abstract class AbstractProfiler extends FileResourceConsumer {
             data.put(Cols.EMBEDDED_DEPTH, "0");
         } else {
             data.put(Cols.IS_EMBEDDED, TRUE);
-            String embeddedFilePath = m.get(TikaCoreProperties.EMBEDDED_RESOURCE_PATH);
+            String embeddedFilePath = m.get(TikaCoreProperties.FINAL_EMBEDDED_RESOURCE_PATH);
             if (!StringUtils.isBlank(embeddedFilePath)) {
-                data.put(Cols.FILE_NAME, getFileName(m.get(embeddedFilePath)));
+                data.put(Cols.FILE_NAME, getFileName(embeddedFilePath));
                 data.put(Cols.EMBEDDED_FILE_PATH, embeddedFilePath);
             }
             if (!StringUtils.isBlank(m.get(TikaCoreProperties.EMBEDDED_DEPTH))) {
@@ -430,7 +430,7 @@ public abstract class AbstractProfiler extends FileResourceConsumer {
         String content = contentTags.getContent();
         if (content == null || content
                 .trim()
-                .length() == 0) {
+                .isEmpty()) {
             data.put(Cols.HAS_CONTENT, FALSE);
         } else {
             data.put(Cols.HAS_CONTENT, TRUE);
@@ -466,7 +466,7 @@ public abstract class AbstractProfiler extends FileResourceConsumer {
         String content = truncateContent(contentTags, maxContentLength, data);
         if (content == null || content
                 .trim()
-                .length() == 0) {
+                .isEmpty()) {
             content = "";
         }
         return compositeTextStatsCalculator.calculate(content);

@@ -21,7 +21,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -97,7 +96,6 @@ import org.apache.tika.parser.ParserDecorator;
 import org.apache.tika.parser.PasswordProvider;
 import org.apache.tika.parser.RecursiveParserWrapper;
 import org.apache.tika.parser.digestutils.CommonsDigester;
-import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.sax.BasicContentHandlerFactory;
 import org.apache.tika.sax.BodyContentHandler;
 import org.apache.tika.sax.ContentHandlerFactory;
@@ -107,6 +105,7 @@ import org.apache.tika.sax.WriteOutContentHandler;
 import org.apache.tika.sax.boilerpipe.BoilerpipeContentHandler;
 import org.apache.tika.serialization.JsonMetadata;
 import org.apache.tika.serialization.JsonMetadataList;
+import org.apache.tika.utils.XMLReaderUtils;
 import org.apache.tika.xmp.XMPMetadata;
 
 /**
@@ -123,7 +122,7 @@ public class TikaCLI {
             return new DefaultHandler();
         }
     };
-    private File extractDir = new File(".");
+    private Path extractDir = Paths.get(".");
     private ParseContext context;
     private Detector detector;
     private Parser parser;
@@ -302,9 +301,11 @@ public class TikaCLI {
      * @throws TransformerConfigurationException if the transformer can not be created
      * @see <a href="https://issues.apache.org/jira/browse/TIKA-277">TIKA-277</a>
      */
-    private static TransformerHandler getTransformerHandler(OutputStream output, String method, String encoding, boolean prettyPrint) throws TransformerConfigurationException {
-        SAXTransformerFactory factory = (SAXTransformerFactory) SAXTransformerFactory.newInstance();
+    private static TransformerHandler getTransformerHandler(OutputStream output, String method, String encoding, boolean prettyPrint)
+            throws TransformerConfigurationException, TikaException {
+        SAXTransformerFactory factory = XMLReaderUtils.getSAXTransformerFactory();
         TransformerHandler handler = factory.newTransformerHandler();
+
         handler
                 .getTransformer()
                 .setOutputProperty(OutputKeys.METHOD, method);
@@ -327,21 +328,6 @@ public class TikaCLI {
             }
         }
         return false;
-    }
-
-    private void configurePDFExtractSettings() {
-        if (configFilePath == null && context.get(PDFParserConfig.class) == null) {
-            PDFParserConfig pdfParserConfig = new PDFParserConfig();
-            pdfParserConfig.setExtractInlineImages(true);
-            pdfParserConfig.setExtractIncrementalUpdateInfo(true);
-            pdfParserConfig.setParseIncrementalUpdates(true);
-            String warn = "As a convenience, TikaCLI has turned on extraction of\n" +
-                    "inline images and incremental updates for the PDFParser (TIKA-2374, " +
-                    "TIKA-4017 and TIKA-4354).\n" +
-                    "This is not the default behavior in Tika generally or in tika-server.";
-            LOG.info(warn);
-            context.set(PDFParserConfig.class, pdfParserConfig);
-        }
     }
 
     public void process(String arg) throws Exception {
@@ -435,10 +421,10 @@ public class TikaCLI {
             String dirPath = arg.substring("--extract-dir=".length());
             //if the user accidentally doesn't include
             //a directory, set the directory to the cwd
-            if (dirPath.length() == 0) {
+            if (dirPath.isEmpty()) {
                 dirPath = ".";
             }
-            extractDir = new File(dirPath);
+            extractDir = Paths.get(dirPath);
         } else if (arg.equals("-z") || arg.equals("--extract")) {
             type = NO_OUTPUT;
             context.set(EmbeddedDocumentExtractor.class, new FileEmbeddedDocumentExtractor());
@@ -468,7 +454,6 @@ public class TikaCLI {
                 } else {
                     url = new URL(arg);
                 }
-                configurePDFExtractSettings();
                 if (recursiveJSON) {
                     handleRecursiveJson(url, System.out);
                 } else {
@@ -659,17 +644,21 @@ public class TikaCLI {
     }
 
     private void configure() throws TikaException, IOException, SAXException {
-
+        if (configFilePath != null) {
+            config = new TikaConfig(new File(configFilePath));
+        } else {
+            String warn = "As a convenience, TikaCLI has turned on several non-default features\n" +
+                    "as specified in tika-app/src/main/resources/tika-config-default-single-file.xml.\n" +
+                    "See: TIKA-2374, TIKA-4017, TIKA-4354 and TIKA-4472).\n" +
+                    "This is not the default behavior in Tika generally or in tika-server.";
+            LOG.info(warn);
+            try (InputStream is = getClass().getResourceAsStream("/tika-config-default-single-file.xml")) {
+                config = new TikaConfig(is);
+            }
+        }
         if (networkURI != null) {
             parser = new NetworkParser(networkURI);
-            config = TikaConfig.getDefaultConfig();
         } else {
-            if (configFilePath != null) {
-                config = new TikaConfig(new File(configFilePath));
-            } else {
-                config = TikaConfig.getDefaultConfig();
-            }
-
             parser = new AutoDetectParser(config);
             if (digester != null) {
                 parser = new DigestingParser(parser, digester, false);
@@ -863,17 +852,17 @@ public class TikaCLI {
         Set<String> fileMimes = new HashSet<>();
         for (File mf : dir.listFiles()) {
             if (mf.isFile()) {
-                BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(mf), UTF_8));
-                String line;
-                while ((line = r.readLine()) != null) {
-                    if (line.startsWith("!:mime") || line.startsWith("#!:mime")) {
-                        String mime = line
-                                .substring(7)
-                                .trim();
-                        fileMimes.add(mime);
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(mf), UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        if (line.startsWith("!:mime") || line.startsWith("#!:mime")) {
+                            String mime = line
+                                    .substring(7)
+                                    .trim();
+                            fileMimes.add(mime);
+                        }
                     }
                 }
-                r.close();
             }
         }
 
@@ -1070,7 +1059,6 @@ public class TikaCLI {
 
     private class FileEmbeddedDocumentExtractor implements EmbeddedDocumentExtractor {
 
-        private final TikaConfig config = TikaConfig.getDefaultConfig();
         private final EmbeddedStreamTranslator embeddedStreamTranslator = new DefaultEmbeddedStreamTranslator();
         private int count = 0;
 
@@ -1086,22 +1074,20 @@ public class TikaCLI {
             MediaType contentType = detector.detect(inputStream, metadata);
 
             String name = metadata.get(TikaCoreProperties.RESOURCE_NAME_KEY);
-            File outputFile = null;
+            Path outputFile = null;
             if (name == null) {
-                name = "file" + count++;
+                name = "file_" + count++;
             }
             outputFile = getOutputFile(name, metadata, contentType);
 
 
-            File parent = outputFile.getParentFile();
-            if (!parent.exists()) {
-                if (!parent.mkdirs()) {
-                    throw new IOException("unable to create directory \"" + parent + "\"");
-                }
+            Path parent = outputFile.getParent();
+            if (parent != null && ! Files.isDirectory(parent)) {
+                Files.createDirectories(parent);
             }
             System.out.println("Extracting '" + name + "' (" + contentType + ") to " + outputFile);
 
-            try (FileOutputStream os = new FileOutputStream(outputFile)) {
+            try (OutputStream os = Files.newOutputStream(outputFile)) {
                 if (embeddedStreamTranslator.shouldTranslate(inputStream, metadata)) {
                     try (InputStream translated = embeddedStreamTranslator.translate(inputStream, metadata)) {
                         IOUtils.copy(translated, os);
@@ -1118,7 +1104,7 @@ public class TikaCLI {
             }
         }
 
-        private File getOutputFile(String name, Metadata metadata, MediaType contentType) {
+        private Path getOutputFile(String name, Metadata metadata, MediaType contentType) throws IOException {
             String ext = getExtension(contentType);
             if (name.indexOf('.') == -1 && contentType != null) {
                 name += ext;
@@ -1145,13 +1131,14 @@ public class TikaCLI {
             if (prefixLength > -1) {
                 normalizedName = normalizedName.substring(prefixLength);
             }
-            File outputFile = new File(extractDir, normalizedName);
+            Path outputFile = extractDir.resolve(normalizedName);
             //if file already exists, prepend uuid
-            if (outputFile.exists()) {
+            if (Files.exists(outputFile)) {
                 String fileName = FilenameUtils.getName(normalizedName);
-                outputFile = new File(extractDir, UUID
-                        .randomUUID()
-                        .toString() + "-" + fileName);
+                outputFile = extractDir.resolve( UUID.randomUUID() + "-" + fileName);
+            }
+            if (! outputFile.toAbsolutePath().normalize().startsWith(extractDir.toAbsolutePath().normalize())) {
+                throw new IOException("Path traversal?!: " + outputFile.toAbsolutePath());
             }
             return outputFile;
         }
@@ -1168,7 +1155,7 @@ public class TikaCLI {
                     return ext;
                 }
             } catch (MimeTypeException e) {
-                e.printStackTrace();
+                LOG.info("bad mime type?", e);
             }
             return ".bin";
 

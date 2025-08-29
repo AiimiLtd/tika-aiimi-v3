@@ -37,11 +37,11 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLResolver;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.TransformerFactoryConfigurationError;
+import javax.xml.transform.sax.SAXTransformerFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,6 +73,7 @@ public class XMLReaderUtils implements Serializable {
      */
     public static final int DEFAULT_POOL_SIZE = 10;
     public static final int DEFAULT_MAX_ENTITY_EXPANSIONS = 20;
+    public static final int DEFAULT_NUM_REUSES = 100;
     /**
      * Serial version UID
      */
@@ -122,12 +123,11 @@ public class XMLReaderUtils implements Serializable {
     private static final AtomicInteger POOL_GENERATION = new AtomicInteger();
     private static final EntityResolver IGNORING_SAX_ENTITY_RESOLVER =
             (publicId, systemId) -> new InputSource(new StringReader(""));
-    private static final XMLResolver IGNORING_STAX_ENTITY_RESOLVER =
-            (publicID, systemID, baseURI, namespace) -> "";
     /**
      * Parser pool size
      */
     private static int POOL_SIZE = DEFAULT_POOL_SIZE;
+    private static int MAX_NUM_REUSES = DEFAULT_NUM_REUSES;
     private static long LAST_LOG = -1;
     private static volatile int MAX_ENTITY_EXPANSIONS = determineMaxEntityExpansions();
     private static ArrayBlockingQueue<PoolSAXParser> SAX_PARSERS =
@@ -292,7 +292,7 @@ public class XMLReaderUtils implements Serializable {
      * If a factory is not explicitly specified, then a default factory
      * instance is created and returned. The default factory instance is
      * configured to be namespace-aware and to apply reasonable security
-     * using the {@link #IGNORING_STAX_ENTITY_RESOLVER}.
+     * precautions.
      *
      * @return StAX input factory
      * @since Apache Tika 1.13
@@ -302,11 +302,12 @@ public class XMLReaderUtils implements Serializable {
         if (LOG.isDebugEnabled()) {
             LOG.debug("XMLInputFactory class {}", factory.getClass());
         }
-
+        factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
         tryToSetStaxProperty(factory, XMLInputFactory.IS_NAMESPACE_AWARE, true);
         tryToSetStaxProperty(factory, XMLInputFactory.IS_VALIDATING, false);
+        tryToSetStaxProperty(factory, XMLInputFactory.SUPPORT_DTD, false);
+        tryToSetStaxProperty(factory, XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
 
-        factory.setXMLResolver(IGNORING_STAX_ENTITY_RESOLVER);
         trySetStaxSecurityManager(factory);
         return factory;
     }
@@ -371,13 +372,51 @@ public class XMLReaderUtils implements Serializable {
      * @since Apache Tika 1.17
      */
     public static Transformer getTransformer() throws TikaException {
+        TransformerFactory transformerFactory = getTransformerFactory();
         try {
+            return transformerFactory.newTransformer();
+        } catch (TransformerConfigurationException e) {
+            throw new TikaException("Transformer not available", e);
+        }
+    }
+
+    /**
+     * Returns a TransformerFactory. The factory is configured with
+     * {@link XMLConstants#FEATURE_SECURE_PROCESSING secure XML processing} and other
+     * settings to prevent XXE.
+     *
+     * @return TransformerFactory
+     * @throws TikaException
+     */
+    public static TransformerFactory getTransformerFactory() throws TikaException {
+        try {
+
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
             transformerFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             trySetTransformerAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_DTD, "");
-            trySetTransformerAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_STYLESHEET,
-                    "");
-            return transformerFactory.newTransformer();
+            trySetTransformerAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+            return transformerFactory;
+        } catch (TransformerConfigurationException | TransformerFactoryConfigurationError e) {
+            throw new TikaException("Transformer not available", e);
+        }
+    }
+
+    /**
+     * Returns a SAXTransformerFactory. The factory is configured with
+     * {@link XMLConstants#FEATURE_SECURE_PROCESSING secure XML processing} and other
+     * settings to prevent XXE.
+     *
+     * @return TransformerFactory
+     * @throws TikaException
+     */
+    public static SAXTransformerFactory getSAXTransformerFactory() throws TikaException {
+        try {
+
+            SAXTransformerFactory transformerFactory = (SAXTransformerFactory) SAXTransformerFactory.newInstance();
+            transformerFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            trySetTransformerAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            trySetTransformerAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+            return transformerFactory;
         } catch (TransformerConfigurationException | TransformerFactoryConfigurationError e) {
             throw new TikaException("Transformer not available", e);
         }
@@ -400,20 +439,22 @@ public class XMLReaderUtils implements Serializable {
         DocumentBuilder builder = context.get(DocumentBuilder.class);
         PoolDOMBuilder poolBuilder = null;
         if (builder == null) {
-            poolBuilder = acquireDOMBuilder();
-            if (poolBuilder != null) {
-                builder = poolBuilder.getDocumentBuilder();
-            } else {
+            if (POOL_SIZE == 0) {
                 builder = getDocumentBuilder();
+            } else {
+                poolBuilder = acquireDOMBuilder();
+                if (poolBuilder != null) {
+                    builder = poolBuilder.getDocumentBuilder();
+                } else {
+                    builder = getDocumentBuilder();
+                }
             }
         }
 
         try {
             return builder.parse(is);
         } finally {
-            if (poolBuilder != null) {
-                releaseDOMBuilder(poolBuilder);
-            }
+            releaseDOMBuilder(poolBuilder);
         }
     }
 
@@ -434,16 +475,22 @@ public class XMLReaderUtils implements Serializable {
         DocumentBuilder builder = context.get(DocumentBuilder.class);
         PoolDOMBuilder poolBuilder = null;
         if (builder == null) {
-            poolBuilder = acquireDOMBuilder();
-            builder = poolBuilder.getDocumentBuilder();
+            if (POOL_SIZE == 0) {
+                builder = getDocumentBuilder();
+            } else {
+                poolBuilder = acquireDOMBuilder();
+                if (poolBuilder != null) {
+                    builder = poolBuilder.getDocumentBuilder();
+                } else {
+                    builder = getDocumentBuilder();
+                }
+            }
         }
 
         try {
             return builder.parse(new InputSource(reader));
         } finally {
-            if (poolBuilder != null) {
-                releaseDOMBuilder(poolBuilder);
-            }
+            releaseDOMBuilder(poolBuilder);
         }
     }
 
@@ -475,11 +522,23 @@ public class XMLReaderUtils implements Serializable {
      */
     public static Document buildDOM(String uriString)
             throws TikaException, IOException, SAXException {
-        PoolDOMBuilder builder = acquireDOMBuilder();
+        PoolDOMBuilder poolBuilder = null;
+        DocumentBuilder builder = null;
+        if (POOL_SIZE == 0) {
+            builder = getDocumentBuilder();
+        } else {
+            poolBuilder = acquireDOMBuilder();
+            if (poolBuilder != null) {
+                builder = poolBuilder.getDocumentBuilder();
+            } else {
+                builder = getDocumentBuilder();
+            }
+        }
+
         try {
-            return builder.getDocumentBuilder().parse(uriString);
+            return builder.parse(uriString);
         } finally {
-            releaseDOMBuilder(builder);
+            releaseDOMBuilder(poolBuilder);
         }
     }
 
@@ -494,11 +553,23 @@ public class XMLReaderUtils implements Serializable {
      */
     public static Document buildDOM(InputStream is)
             throws TikaException, IOException, SAXException {
-        PoolDOMBuilder builder = acquireDOMBuilder();
+        PoolDOMBuilder poolBuilder = null;
+        DocumentBuilder builder = null;
+        if (POOL_SIZE == 0) {
+            builder = getDocumentBuilder();
+        } else {
+            poolBuilder = acquireDOMBuilder();
+            if (poolBuilder != null) {
+                builder = poolBuilder.getDocumentBuilder();
+            } else {
+                builder = getDocumentBuilder();
+            }
+        }
+
         try {
-            return builder.getDocumentBuilder().parse(is);
+            return builder.parse(is);
         } finally {
-            releaseDOMBuilder(builder);
+            releaseDOMBuilder(poolBuilder);
         }
     }
 
@@ -522,19 +593,21 @@ public class XMLReaderUtils implements Serializable {
         SAXParser saxParser = context.get(SAXParser.class);
         PoolSAXParser poolSAXParser = null;
         if (saxParser == null) {
-            poolSAXParser = acquireSAXParser();
-            if (poolSAXParser != null) {
-                saxParser = poolSAXParser.getSAXParser();
-            } else {
+            if (POOL_SIZE == 0) {
                 saxParser = getSAXParser();
+            } else {
+                poolSAXParser = acquireSAXParser();
+                if (poolSAXParser != null) {
+                    saxParser = poolSAXParser.getSAXParser();
+                } else {
+                    saxParser = getSAXParser();
+                }
             }
         }
         try {
             saxParser.parse(is, new OfflineContentHandler(contentHandler));
         } finally {
-            if (poolSAXParser != null) {
-                releaseParser(poolSAXParser);
-            }
+            releaseParser(poolSAXParser);
         }
     }
 
@@ -558,19 +631,21 @@ public class XMLReaderUtils implements Serializable {
         SAXParser saxParser = context.get(SAXParser.class);
         PoolSAXParser poolSAXParser = null;
         if (saxParser == null) {
-            poolSAXParser = acquireSAXParser();
-            if (poolSAXParser != null) {
-                saxParser = poolSAXParser.getSAXParser();
-            } else {
+            if (POOL_SIZE == 0) {
                 saxParser = getSAXParser();
+            } else {
+                poolSAXParser = acquireSAXParser();
+                if (poolSAXParser != null) {
+                    saxParser = poolSAXParser.getSAXParser();
+                } else {
+                    saxParser = getSAXParser();
+                }
             }
         }
         try {
             saxParser.parse(new InputSource(reader), new OfflineContentHandler(contentHandler));
         } finally {
-            if (poolSAXParser != null) {
-                releaseParser(poolSAXParser);
-            }
+            releaseParser(poolSAXParser);
         }
     }
 
@@ -609,6 +684,9 @@ public class XMLReaderUtils implements Serializable {
      * @param builder builder to return
      */
     private static void releaseDOMBuilder(PoolDOMBuilder builder) {
+        if (builder == null) {
+            return;
+        }
         if (builder.getPoolGeneration() != POOL_GENERATION.get()) {
             return;
         }
@@ -619,6 +697,15 @@ public class XMLReaderUtils implements Serializable {
         }
         DOM_POOL_LOCK
                 .readLock().lock();
+        builder.incrementUses();
+        if (builder.numUses >= MAX_NUM_REUSES) {
+            try {
+                builder = new PoolDOMBuilder(builder.getPoolGeneration(), getDocumentBuilderFactory().newDocumentBuilder());
+            } catch (ParserConfigurationException e) {
+                LOG.warn("Exception trying to configure a new dom builder?!", e);
+                return;
+            }
+        }
         try {
             //if there are extra parsers (e.g. after a reset of the pool to a smaller size),
             // this parser will not be added and will then be gc'd
@@ -671,6 +758,9 @@ public class XMLReaderUtils implements Serializable {
      * @param parser parser to return
      */
     private static void releaseParser(PoolSAXParser parser) {
+        if (parser == null) {
+            return;
+        }
         try {
             parser.reset();
         } catch (UnsupportedOperationException e) {
@@ -684,6 +774,15 @@ public class XMLReaderUtils implements Serializable {
         SAX_POOL_LOCK
                 .readLock().lock();
         try {
+            parser.incrementUses();
+            if (parser.numUses >= MAX_NUM_REUSES) {
+                try {
+                    parser = buildPoolParser(parser.getGeneration(), getSAXParserFactory().newSAXParser());
+                } catch (SAXException | ParserConfigurationException e) {
+                    LOG.warn("Couldn't build new SAXParser after hitting max reuses", e);
+                    return;
+                }
+            }
             //if there are extra parsers (e.g. after a reset of the pool to a smaller size),
             // this parser will not be added and will then be gc'd
             boolean success = SAX_PARSERS.offer(parser);
@@ -804,6 +903,19 @@ public class XMLReaderUtils implements Serializable {
         }
     }
 
+    /**
+     * Get the maximum number of times a SAXParser or DOMBuilder may be reused.
+     *
+     * @return
+     */
+    public static int getMaxNumReuses() {
+        return MAX_NUM_REUSES;
+    }
+
+    public static void setMaxNumReuses(int maxNumReuses) {
+        MAX_NUM_REUSES = maxNumReuses;
+    }
+
     public static int getPoolSize() {
         return POOL_SIZE;
     }
@@ -813,10 +925,16 @@ public class XMLReaderUtils implements Serializable {
      * effect of locking the pool, and rebuilding the pool from
      * scratch with the most recent settings, such as {@link #MAX_ENTITY_EXPANSIONS}
      *
+     * As of Tika 3.2.1, if a value of <code>0</code> is passed in, no SAXParsers or DOMBuilders
+     * will be pooled, and a new parser/builder will be built for each parse.
+     *
      * @param poolSize
      * @since Apache Tika 1.19
      */
     public static void setPoolSize(int poolSize) throws TikaException {
+        if (poolSize < 0) {
+            throw new IllegalArgumentException("PoolSize must be >= 0");
+        }
         //stop the world with a write lock.
         //parsers that are currently in use will be offered later (once the lock is released),
         //but not accepted and will be gc'd.  We have to do this locking and
@@ -831,14 +949,15 @@ public class XMLReaderUtils implements Serializable {
                 parser.reset();
             }
             SAX_PARSERS.clear();
-            SAX_PARSERS = new ArrayBlockingQueue<>(poolSize);
-            int generation = POOL_GENERATION.incrementAndGet();
-            for (int i = 0; i < poolSize; i++) {
-                try {
-                    SAX_PARSERS.offer(buildPoolParser(generation,
-                            getSAXParserFactory().newSAXParser()));
-                } catch (SAXException | ParserConfigurationException e) {
-                    throw new TikaException("problem creating sax parser", e);
+            if (poolSize > 0) {
+                SAX_PARSERS = new ArrayBlockingQueue<>(poolSize);
+                int generation = POOL_GENERATION.incrementAndGet();
+                for (int i = 0; i < poolSize; i++) {
+                    try {
+                        SAX_PARSERS.offer(buildPoolParser(generation, getSAXParserFactory().newSAXParser()));
+                    } catch (SAXException | ParserConfigurationException e) {
+                        throw new TikaException("problem creating sax parser", e);
+                    }
                 }
             }
         } finally {
@@ -850,9 +969,11 @@ public class XMLReaderUtils implements Serializable {
                 .writeLock().lock();
         try {
             DOM_BUILDERS.clear();
-            DOM_BUILDERS = new ArrayBlockingQueue<>(poolSize);
-            for (int i = 0; i < poolSize; i++) {
-                DOM_BUILDERS.offer(new PoolDOMBuilder(POOL_GENERATION.get(), getDocumentBuilder()));
+            if (poolSize > 0) {
+                DOM_BUILDERS = new ArrayBlockingQueue<>(poolSize);
+                for (int i = 0; i < poolSize; i++) {
+                    DOM_BUILDERS.offer(new PoolDOMBuilder(POOL_GENERATION.get(), getDocumentBuilder()));
+                }
             }
         } finally {
             DOM_POOL_LOCK
@@ -973,6 +1094,7 @@ public class XMLReaderUtils implements Serializable {
     private static class PoolDOMBuilder {
         private final int poolGeneration;
         private final DocumentBuilder documentBuilder;
+        int numUses = 0;
 
         PoolDOMBuilder(int poolGeneration, DocumentBuilder documentBuilder) {
             this.poolGeneration = poolGeneration;
@@ -992,12 +1114,16 @@ public class XMLReaderUtils implements Serializable {
             documentBuilder.setEntityResolver(IGNORING_SAX_ENTITY_RESOLVER);
             documentBuilder.setErrorHandler(null);
         }
+
+        void incrementUses() {
+            numUses = 0;
+        }
     }
 
     private abstract static class PoolSAXParser {
         final int poolGeneration;
         final SAXParser saxParser;
-
+        int numUses = 0;
         PoolSAXParser(int poolGeneration, SAXParser saxParser) {
             this.poolGeneration = poolGeneration;
             this.saxParser = saxParser;
@@ -1012,6 +1138,11 @@ public class XMLReaderUtils implements Serializable {
         public SAXParser getSAXParser() {
             return saxParser;
         }
+
+        void incrementUses() {
+            numUses++;
+        }
+
     }
 
     private static class XercesPoolSAXParser extends PoolSAXParser {
@@ -1120,7 +1251,7 @@ public class XMLReaderUtils implements Serializable {
      * If a factory is not explicitly specified, then a default factory
      * instance is created and returned. The default factory instance is
      * configured to be namespace-aware and to apply reasonable security
-     * using the {@link XMLReaderUtils#IGNORING_STAX_ENTITY_RESOLVER}.
+     * precautions.
      *
      * @return StAX input factory
      */

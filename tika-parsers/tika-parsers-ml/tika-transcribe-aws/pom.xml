@@ -25,28 +25,45 @@
   <parent>
     <artifactId>tika-parsers-ml</artifactId>
     <groupId>org.apache.tika</groupId>
-    <version>3.1.1-SNAPSHOT</version>
+    <version>3.2.3-SNAPSHOT</version>
   </parent>
 
   <artifactId>tika-transcribe-aws</artifactId>
   <packaging>bundle</packaging>
   <name>Apache Tika transcribe aws</name>
   <url>http://tika.apache.org/</url>
+
   <!--TODO use latest aws version or the one defined in the tika-parent-->
   <dependencies>
     <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-transcribe</artifactId>
-      <version>${aws.version}</version>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>transcribe</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-s3</artifactId>
-      <version>${aws.version}</version>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sts</artifactId>
     </dependency>
     <dependency>
       <groupId>com.googlecode.json-simple</groupId>
       <artifactId>json-simple</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>javax.xml.bind</groupId>
+      <artifactId>jaxb-api</artifactId>
+      <version>2.3.1</version>
     </dependency>
   </dependencies>
   <build>
@@ -89,13 +106,6 @@
             </manifestEntries>
           </archive>
         </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>test-jar</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
 

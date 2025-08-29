@@ -20,6 +20,16 @@ package org.apache.tika.metadata;
  * A collection of Dublin Core metadata names.
  *
  * @see <a href="http://dublincore.org">dublincore.org</a>
+ *
+ * <p>
+ * These keys are intended to be a unifying normalization of information
+ * within a file. For some formats, like PDF, where there may be conflicting
+ * information in different parts of the file (xmp vs. docinfo) for the
+ * same metadata key, we do what we can, and these keys represent a
+ * normalization of metadata values within a file.
+ * <p>
+ * For Dublin Core information that derives specifically and only from
+ * XMP, see {@link XMPDC}.
  */
 public interface DublinCore {
 
@@ -47,7 +57,7 @@ public interface DublinCore {
      * the Digital Object Identifier (DOI) and the International Standard
      * Book Number (ISBN).
      */
-    Property IDENTIFIER = Property.internalText(
+    Property IDENTIFIER = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "identifier");
 
     /**
@@ -75,7 +85,7 @@ public interface DublinCore {
      * appropriate, named places or time periods be used in preference to
      * numeric identifiers such as sets of coordinates or date ranges.
      */
-    Property COVERAGE = Property.internalText(
+    Property COVERAGE = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "coverage");
 
     /**
@@ -108,7 +118,7 @@ public interface DublinCore {
      * a graphical representation of content or a free-text account of
      * the content.
      */
-    Property DESCRIPTION = Property.internalText(
+    Property DESCRIPTION = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "description");
 
     /**
@@ -118,7 +128,7 @@ public interface DublinCore {
      * tags with optional subtags. Examples include "en" or "eng" for English,
      * "akk" for Akkadian, and "en-GB" for English used in the United Kingdom.
      */
-    Property LANGUAGE = Property.internalText(
+    Property LANGUAGE = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "language");
 
     /**
@@ -126,7 +136,7 @@ public interface DublinCore {
      * a Publisher include a person, an organisation, or a service. Typically,
      * the name of a Publisher should be used to indicate the entity.
      */
-    Property PUBLISHER = Property.internalText(
+    Property PUBLISHER = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "publisher");
 
     /**
@@ -134,7 +144,7 @@ public interface DublinCore {
      * reference the resource by means of a string or number conforming to
      * a formal identification system.
      */
-    Property RELATION = Property.internalText(
+    Property RELATION = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "relation");
 
     /**
@@ -146,7 +156,7 @@ public interface DublinCore {
      * is absent, no assumptions can be made about the status of these and
      * other rights with respect to the resource.
      */
-    Property RIGHTS = Property.internalText(
+    Property RIGHTS = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "rights");
 
     /**
@@ -156,7 +166,7 @@ public interface DublinCore {
      * means of a string or number conforming to a formal identification
      * system.
      */
-    Property SOURCE = Property.internalText(
+    Property SOURCE = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "source");
 
     /**
@@ -173,7 +183,7 @@ public interface DublinCore {
      * A name given to the resource. Typically, a Title will be a name by
      * which the resource is formally known.
      */
-    Property TITLE = Property.internalText(
+    Property TITLE = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "title");
 
     /**
@@ -184,7 +194,7 @@ public interface DublinCore {
      * [DCMITYPE]). To describe the physical or digital manifestation of
      * the resource, use the Format element.
      */
-    Property TYPE = Property.internalText(
+    Property TYPE = Property.internalTextBag(
             PREFIX_DC + TikaCoreProperties.NAMESPACE_PREFIX_DELIMITER + "type");
 
 }

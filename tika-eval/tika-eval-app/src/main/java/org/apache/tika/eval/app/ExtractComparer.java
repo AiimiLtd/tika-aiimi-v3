@@ -26,9 +26,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 
-import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
+import org.apache.commons.cli.help.HelpFormatter;
 import org.apache.commons.io.FilenameUtils;
 
 import org.apache.tika.batch.FileResource;
@@ -126,10 +126,10 @@ public class ExtractComparer extends AbstractProfiler {
         this.extractReader = extractReader;
     }
 
-    public static void USAGE() {
-        HelpFormatter helpFormatter = new HelpFormatter();
-        helpFormatter.printHelp(80, "java -jar tika-eval-x.y.jar Compare -extractsA extractsA -extractsB extractsB -db mydb", "Tool: Compare", ExtractComparer.OPTIONS,
-                "Note: for the default h2 db, do not include the .mv.db at the end of the db name.");
+    public static void USAGE() throws IOException {
+        HelpFormatter helpFormatter = HelpFormatter.builder().get();
+        helpFormatter.printHelp("java -jar tika-eval-x.y.jar Compare -extractsA extractsA -extractsB extractsB -db mydb", "Tool: Compare", ExtractComparer.OPTIONS, 
+                "Note: for the default h2 db, do not include the .mv.db at the end of the db name.", true);
     }
 
     @Override
@@ -404,7 +404,6 @@ public class ExtractComparer extends AbstractProfiler {
 
         if (sharedDigestKey != null) {
             //first try to find matching digests
-            //this does not elegantly handle multiple matching digests
             return findMatchingDigests(sharedDigestKey, handledB, metadataListA.get(aIndex), metadataListB);
         }
 
@@ -435,7 +434,7 @@ public class ExtractComparer extends AbstractProfiler {
         if (digestA == null) {
             return -1;
         }
-        String resourceName = metadata.get(TikaCoreProperties.RESOURCE_NAME_KEY);
+        String resourceName = metadata.get(TikaCoreProperties.FINAL_EMBEDDED_RESOURCE_PATH);
 
         int cand = -1;
         for (int i = 0; i < metadataListB.size(); i++) {
@@ -446,7 +445,7 @@ public class ExtractComparer extends AbstractProfiler {
             String digestB = mB.get(sharedDigestKey);
             if (digestA.equalsIgnoreCase(digestB)) {
                 cand = i;
-                if (resourceName != null && resourceName.equals(mB.get(TikaCoreProperties.RESOURCE_NAME_KEY))) {
+                if (resourceName != null && resourceName.equals(mB.get(TikaCoreProperties.FINAL_EMBEDDED_RESOURCE_PATH))) {
                     return i;
                 }
             }

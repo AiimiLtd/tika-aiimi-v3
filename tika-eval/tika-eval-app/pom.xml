@@ -21,7 +21,7 @@
   <parent>
     <artifactId>tika-eval</artifactId>
     <groupId>org.apache.tika</groupId>
-    <version>3.1.1-SNAPSHOT</version>
+    <version>3.2.3-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -201,13 +201,6 @@
             </manifestEntries>
           </archive>
         </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>test-jar</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>

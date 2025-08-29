@@ -1,3 +1,49 @@
+Release 3.3.0 - ???
+
+  * Allow multiple values for many Dublin Core keys (TIKA-4466).
+
+  * Extract macros by default in tika-app's commandline and gui (TIKA-4472).
+
+  * Improve extraction of Javascript from PDFs (TIKA-4465).
+
+Release 3.2.2 - 8/6/2025
+
+  * Improve detection of encrypted ODT files (TIKA-4459)
+
+  * Dependency updates (TIKA-4455).
+
+   * Fix concurrency bug in TikaToXMP (TIKA-4393)
+
+
+Release 3.2.1 - 6/26/2025
+
+  * Fix POIFSContainerDetector regression when wrapping an InputStream in
+    a TikaInputStream (TIKA-4441).
+
+  * Important bug fix for zip-based detection on a non-TikaInputStream (TIKA-4424).
+
+  * Improve text extraction from EMF (TIKA-4432).
+
+  * Dependency updates (TIKA-4421).
+
+Release 3.2.0 - 05/21/2025
+
+  * Detect inline images in MSG files (TIKA-4391).
+
+  * Improve extraction of metadata in MSG files (TIKA-4381).
+
+  * Fix concurrency bug in TikaToXMP (TIKA-4393).
+
+  * Fix potential GDAL deadlock (TIKA-4385).
+
+  * Improve extraction of properties from msg files (TIKA-4381).
+
+  * Include internal attachment path in tika-eval reports (TIKA-4374).
+
+  * Upgrade jsoup to 1.20.1 with workaround for change in self-closing tag behavior (TIKA-4419).
+
+  * Upgrade dependencies (TIKA-4379).
+
 Release 3.1.0 - 01/28/25
 
    * Allow users to turn off the injection of some headers into the content stream of MSG
