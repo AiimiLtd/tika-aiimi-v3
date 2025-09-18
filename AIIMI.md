@@ -43,6 +43,8 @@ Cherry-pick the Aiimi fixes and workflows:
 ```
 git cherry-pick 865d4ef6b0e605bf895eab52d988882e1c09537d
 git cherry-pick cb5ab5b926489b17c5e443b20c6038ac26135ab8
+git cherry-pick e8bc71a88050aa0f54b945e96d8c843318128590
+git cherry-pick 1b504a850a234828441c46aef5fbb128d8fa2a3e
 ```
 
 There may one or two others in there, so check ```git log``` on the previous release branch.
