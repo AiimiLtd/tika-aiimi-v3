@@ -1,5 +1,9 @@
-FROM openjdk:21-slim
+FROM ubuntu:plucky
+RUN set -eux \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends openjdk-21-jre-headless ca-certificates \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 COPY ./tika-server/tika-server-standard/target/tika-server-standard-3.2.3.jar /app/tika.jar
 EXPOSE 9998
-ENV _JAVA_OPTIONS "-XX:MinRAMPercentage=60.0 -XX:MaxRAMPercentage=80.0"
-CMD java -jar /app/tika.jar -host 0.0.0.0 -port 9998
+ENV _JAVA_OPTIONS="-XX:MinRAMPercentage=60.0 -XX:MaxRAMPercentage=80.0"
+CMD ["java", "-jar", "/app/tika.jar", "-host", "0.0.0.0", "-port", "9998"]
