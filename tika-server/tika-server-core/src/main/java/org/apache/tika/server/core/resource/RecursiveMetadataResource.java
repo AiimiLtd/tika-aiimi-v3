@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//CHECKSTYLE:OFF
 package org.apache.tika.server.core.resource;
 
 import static org.apache.tika.server.core.resource.TikaResource.fillMetadata;
@@ -155,7 +154,7 @@ public class RecursiveMetadataResource {
                 .build(); */
 
         // AIIMI
-		return runTask(att.getObject(InputStream.class), new Metadata(), att.getHeaders(), info, handlerTypeName, timeout);
+        return runTask(att.getObject(InputStream.class), new Metadata(), att.getHeaders(), info, handlerTypeName, timeout);
     }
 
     /**
@@ -201,8 +200,8 @@ public class RecursiveMetadataResource {
                 .build(); */
 
         // AIIMI
-		Metadata metadata = new Metadata();
-		return runTask(TikaResource.getInputStream(is, metadata, httpHeaders, info), metadata, httpHeaders.getRequestHeaders(), info, handlerTypeName, timeout);
+        Metadata metadata = new Metadata();
+        return runTask(TikaResource.getInputStream(is, metadata, httpHeaders, info), metadata, httpHeaders.getRequestHeaders(), info, handlerTypeName, timeout);
     }
 
     private MetadataList parseMetadataToMetadataList(InputStream is, Metadata metadata, MultivaluedMap<String, String> httpHeaders, UriInfo info, HandlerConfig handlerConfig)
@@ -210,24 +209,24 @@ public class RecursiveMetadataResource {
         return new MetadataList(parseMetadata(is, metadata, httpHeaders, info, handlerConfig));
     }
 
-	/* AIIMI to add timeout */
-	//protected Response runTask(InputStream inputStream, MultivaluedMap<String, String> httpHeaders,UriInfo info,String handlerTypeName, int timeout)
-	protected Response runTask(InputStream is,
-								Metadata metadata,
-								MultivaluedMap<String, String> httpHeaders,
-								UriInfo info,
-								String handlerTypeName,
-								int timeout)
-		throws InterruptedException, ExecutionException{
-		
-		RMetaParseTask rMetaParseTask = new RMetaParseTask();
-    	rMetaParseTask.setInputStream(is);
-		rMetaParseTask.setMetadata(metadata);
-    	rMetaParseTask.setHttpHeaders(httpHeaders);
-    	rMetaParseTask.setInfo(info);
-    	rMetaParseTask.setHandlerTypeName(handlerTypeName);
-    	
-		ExecutorService executor = Executors.newSingleThreadExecutor();
+    /* AIIMI to add timeout */
+    //protected Response runTask(InputStream inputStream, MultivaluedMap<String, String> httpHeaders,UriInfo info,String handlerTypeName, int timeout)
+    protected Response runTask(InputStream is,
+                                Metadata metadata,
+                                MultivaluedMap<String, String> httpHeaders,
+                                UriInfo info,
+                                String handlerTypeName,
+                                int timeout)
+        throws InterruptedException, ExecutionException{
+        
+        RMetaParseTask rMetaParseTask = new RMetaParseTask();
+        rMetaParseTask.setInputStream(is);
+        rMetaParseTask.setMetadata(metadata);
+        rMetaParseTask.setHttpHeaders(httpHeaders);
+        rMetaParseTask.setInfo(info);
+        rMetaParseTask.setHandlerTypeName(handlerTypeName);
+        
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         Future<MetadataList> future = executor.submit(rMetaParseTask);
          
         try{
@@ -240,49 +239,49 @@ public class RecursiveMetadataResource {
             return response;
         }
         finally{
-        	 executor.shutdownNow();
+             executor.shutdownNow();
         }
-	}
-	
-	public class RMetaParseTask implements Callable<MetadataList> {
+    }
+    
+    public class RMetaParseTask implements Callable<MetadataList> {
 
-		protected InputStream _is = null;
-		protected Metadata _metadata = null;
-		protected MultivaluedMap<String, String> _httpHeaders = null; 
-		protected UriInfo _info = null;
-		protected String _handlerTypeName = null;
-		
-		public void setInputStream(InputStream is){
-			_is = is;
-		}
-		
-		public void setMetadata(Metadata metadata){
-			_metadata = metadata;
-		}
-		
-		public void setHttpHeaders(MultivaluedMap<String, String> httpHeaders){
-			_httpHeaders = httpHeaders;
-		}
-		
-		public void setInfo(UriInfo info){
-			_info = info;
-		}
-		
-		public void setHandlerTypeName(String handlerTypeName){
-			_handlerTypeName = handlerTypeName;
-		}
-		
-	    @Override
-	    public MetadataList call()
-	    	throws Exception {	    
-	    	//return parseMetadata(_is,_httpHeaders, _info, _handlerTypeName);
-			return parseMetadataToMetadataList(_is,
-											   _metadata,
-											   _httpHeaders,
-											   _info,
-											   buildHandlerConfig(_httpHeaders, _handlerTypeName, HandlerConfig.PARSE_MODE.RMETA)
-											   );
-	    }
-	}
+        protected InputStream _is = null;
+        protected Metadata _metadata = null;
+        protected MultivaluedMap<String, String> _httpHeaders = null; 
+        protected UriInfo _info = null;
+        protected String _handlerTypeName = null;
+        
+        public void setInputStream(InputStream is){
+            _is = is;
+        }
+        
+        public void setMetadata(Metadata metadata){
+            _metadata = metadata;
+        }
+        
+        public void setHttpHeaders(MultivaluedMap<String, String> httpHeaders){
+            _httpHeaders = httpHeaders;
+        }
+        
+        public void setInfo(UriInfo info){
+            _info = info;
+        }
+        
+        public void setHandlerTypeName(String handlerTypeName){
+            _handlerTypeName = handlerTypeName;
+        }
+        
+        @Override
+        public MetadataList call()
+            throws Exception {	    
+            //return parseMetadata(_is,_httpHeaders, _info, _handlerTypeName);
+            return parseMetadataToMetadataList(_is,
+                                               _metadata,
+                                               _httpHeaders,
+                                               _info,
+                                               buildHandlerConfig(_httpHeaders, _handlerTypeName, HandlerConfig.PARSE_MODE.RMETA)
+                                               );
+        }
+    }
 }
 //CHECKSTYLE:ON
