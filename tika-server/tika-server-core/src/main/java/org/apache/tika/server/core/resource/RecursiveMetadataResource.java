@@ -20,6 +20,13 @@ import static org.apache.tika.server.core.resource.TikaResource.fillMetadata;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -118,6 +125,36 @@ public class RecursiveMetadataResource {
             List<Metadata> metadataList = parseMetadata(tis, tikaResource.newRequestMetadata(), att.getHeaders(),
                     handlerTypeName);
             return Response.ok(new MetadataList(metadataList)).build();
+        }
+    }
+
+    /**
+     * AIIMI: multipart form parse with a per-request timeout (seconds).
+     * Default handler. Path: {@code /rmeta/form/{timeout}}.
+     * Timeout segment is digits-only so it does not clash with {@code /rmeta/form/{handler}}.
+     */
+    @POST
+    @Consumes("multipart/form-data")
+    @Produces({"application/json"})
+    @Path("form/{timeout : \\d+}")
+    public Response getMetadataFromMultipartWithTimeout(Attachment att, @PathParam("timeout") int timeout)
+            throws Exception {
+        return getMetadataFromMultipartWithTimeout(att, null, timeout);
+    }
+
+    /**
+     * AIIMI: multipart form parse with handler and per-request timeout (seconds).
+     * Path: {@code /rmeta/form/{handler}/{timeout}}.
+     */
+    @POST
+    @Consumes("multipart/form-data")
+    @Produces({"application/json"})
+    @Path("form/{" + HANDLER_TYPE_PARAM + "}/{timeout : \\d+}")
+    public Response getMetadataFromMultipartWithTimeout(Attachment att,
+                                                        @PathParam(HANDLER_TYPE_PARAM) String handlerTypeName,
+                                                        @PathParam("timeout") int timeout) throws Exception {
+        try (TikaInputStream tis = TikaInputStream.get(att.getObject(InputStream.class))) {
+            return runTask(tis, tikaResource.newRequestMetadata(), att.getHeaders(), handlerTypeName, timeout);
         }
     }
 
@@ -250,6 +287,81 @@ public class RecursiveMetadataResource {
             List<Metadata> metadataList = parseMetadata(tis, metadata, httpHeaders.getRequestHeaders(),
                     handlerTypeName);
             return Response.ok(new MetadataList(metadataList)).build();
+        }
+    }
+
+    /**
+     * AIIMI: PUT parse with handler and per-request timeout (seconds).
+     * Path: {@code /rmeta/{handler}/{timeout}}.
+     */
+    @PUT
+    @Produces("application/json")
+    @Path("{" + HANDLER_TYPE_PARAM + "}/{timeout : \\d+}")
+    public Response getMetadataWithTimeout(InputStream is, @Context HttpHeaders httpHeaders,
+                                           @PathParam(HANDLER_TYPE_PARAM) String handlerTypeName,
+                                           @PathParam("timeout") int timeout) throws Exception {
+        Metadata metadata = tikaResource.newRequestMetadata();
+        try (TikaInputStream tis = TikaInputStream.get(is)) {
+            return runTask(tis, metadata, httpHeaders.getRequestHeaders(), handlerTypeName, timeout);
+        }
+    }
+
+    /* AIIMI to add timeout */
+    protected Response runTask(TikaInputStream tis,
+                               Metadata metadata,
+                               MultivaluedMap<String, String> httpHeaders,
+                               String handlerTypeName,
+                               int timeout)
+            throws InterruptedException, ExecutionException {
+
+        RMetaParseTask rMetaParseTask = new RMetaParseTask();
+        rMetaParseTask.setInputStream(tis);
+        rMetaParseTask.setMetadata(metadata);
+        rMetaParseTask.setHttpHeaders(httpHeaders);
+        rMetaParseTask.setHandlerTypeName(handlerTypeName);
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<MetadataList> future = executor.submit(rMetaParseTask);
+
+        try {
+            return Response.ok(future.get(timeout, TimeUnit.SECONDS)).build();
+        } catch (TimeoutException e) {
+            LOG.warn("Cancelled rmeta call as it took longer than [" + timeout + "] seconds");
+            Response response = Response.status(504,
+                    "Cancelled rmeta call as it took longer than [" + timeout + "] seconds").build();
+            future.cancel(true);
+            return response;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    public class RMetaParseTask implements Callable<MetadataList> {
+
+        protected TikaInputStream _tis = null;
+        protected Metadata _metadata = null;
+        protected MultivaluedMap<String, String> _httpHeaders = null;
+        protected String _handlerTypeName = null;
+
+        public void setInputStream(TikaInputStream tis) {
+            _tis = tis;
+        }
+
+        public void setMetadata(Metadata metadata) {
+            _metadata = metadata;
+        }
+
+        public void setHttpHeaders(MultivaluedMap<String, String> httpHeaders) {
+            _httpHeaders = httpHeaders;
+        }
+
+        public void setHandlerTypeName(String handlerTypeName) {
+            _handlerTypeName = handlerTypeName;
+        }
+
+        @Override
+        public MetadataList call() throws Exception {
+            return new MetadataList(parseMetadata(_tis, _metadata, _httpHeaders, _handlerTypeName));
         }
     }
 }
