@@ -1,0 +1,80 @@
+name: Build Docker Image
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '21' ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get Tag
+        shell: bash
+        run: |
+          releaseTag="${GITHUB_REF:10}"
+          echo "TAG=${releaseTag}" >> $GITHUB_ENV
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java }}
+      # - name: Inform Slack channel
+      #   run: |
+      #     curl -X POST https://hooks.slack.com/services/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 -H 'Content-Type: application/json' -d '{ "text": "Tika ${{ env.TAG }} is being built."}'
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: aiimilabs
+          password: ${{ secrets.AIIMI_LABS_DOCKER }}
+      - name: Set up Maven
+        run: ./setup.sh
+      - name: Build with Maven
+        run: ./build.sh
+      - name: List targets
+        run: cd tika-server/tika-server-standard/target && ls -la
+      - name: Stage tika-server jar
+        shell: bash
+        run: |
+          shopt -s nullglob
+          target_dir=tika-server/tika-server-standard/target
+          staged="${target_dir}/tika-server-standard.jar"
+          matches=()
+          for jar in "${target_dir}"/tika-server-standard-*.jar; do
+            base="$(basename "${jar}")"
+            case "${base}" in
+              *-sources.jar|*-javadoc.jar|*-tests.jar|original-*) continue ;;
+            esac
+            matches+=("${jar}")
+          done
+          if [ "${#matches[@]}" -ne 1 ]; then
+            echo "Expected exactly one tika-server-standard jar, found: ${matches[*]:-none}" >&2
+            ls -la "${target_dir}"
+            exit 1
+          fi
+          cp "${matches[0]}" "${staged}"
+          echo "TIKA_SERVER_JAR=${matches[0]}" >> "${GITHUB_ENV}"
+          echo "Staged ${matches[0]} -> ${staged}"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: DockerFile
+          push: true
+          tags: "labsaiimi/tika:${{ env.TAG }}"
+      - name: Upload jar to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.TIKA_SERVER_JAR }}
+          tag: "${{ env.TAG }}"
+          overwrite: true
+      # - name: Notify Slack
+      #   run: |
+      #     curl -X POST https://hooks.slack.com/services/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 -H 'Content-Type: application/json' -d '{"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"Tika *${{ env.TAG }}* is now available."},"accessory":{"type":"button","text":{"type":"plain_text","text":"${{ env.TAG }} :rocket:"},"url":"https://github.com/AiimiLtd/tika/releases/tag/${{ env.TAG }}","action_id":"button-action"}}]}'
